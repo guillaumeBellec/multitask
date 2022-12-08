@@ -118,12 +118,14 @@ class GradientNormalizingFunction(torch.autograd.Function):
 
         m, t, beta, epsilon = ctx.saved_tensors
 
-        grad_squared = (grads * grads).mean(0) # mean over batch dimension
+        grad_squared = (grads * grads).mean(0) # always, mean over batch dimension
 
         if len(m.shape) == 1 and m.shape[0] == 1:
             # just normalize the gradient norm
             grad_squared = grad_squared.sum()
         else:
+            while len(grads.shape) > len(m.shape):
+                grad_squared = grad_squared.sum(0)
             # assuming normalization component-wise after batch dimension
             assert grads.shape[1:] == m.shape, "got gradient with shape: {} variance accumulated: {} ".format(grads.shape, m.shape)
 
@@ -133,12 +135,12 @@ class GradientNormalizingFunction(torch.autograd.Function):
 
         v = m / (1 - torch.pow(beta,t))
         v = v.unsqueeze(0)
-        g = grads / torch.sqrt(v + epsilon)
+        g = grads / torch.sqrt(v).clip(min=epsilon)
         return g, None, None, None, None
 
 class GradientNormalizer(nn.Module):
 
-    def __init__(self, feature_shape=[1], beta=0.999, epsilon=1e-8, dtype=torch.float32):
+    def __init__(self, feature_shape=[1], beta=0.999, epsilon=1e-16, dtype=torch.float32):
         super(GradientNormalizer,self).__init__()
         self.beta = beta
         self.epsilon = epsilon
@@ -152,7 +154,7 @@ class GradientNormalizer(nn.Module):
 
 class NormalizedMultiTaskSplitter(nn.Module):
 
-    def __init__(self, num_copies, feature_shape, use_min_norm_proj=False, random_order=True, beta=0.999, epsilon=1e-8, dtype=torch.float32):
+    def __init__(self, num_copies, feature_shape, use_min_norm_proj=False, random_order=True, beta=0.999, epsilon=1e-16, dtype=torch.float32):
         super(NormalizedMultiTaskSplitter,self).__init__()
         self.num_copies = num_copies
         self.splitter = MultiTaskSplitter(num_copies=num_copies, use_min_norm_proj=use_min_norm_proj, random_order=random_order)
@@ -168,8 +170,8 @@ def forward_backward_split(z_forward, z_backward):
     return (z_forward - z_backward).detach() + z_backward
 
 
-def truncated_proj_a_on_b(a,b, espilon=1e-12):
-    u = b / torch.sqrt(espilon + (b * b).sum(1, keepdim=True))
+def truncated_proj_a_on_b(a,b, epsilon=1e-16):
+    u = b / torch.sqrt((b * b).sum(1, keepdim=True)).clip(min=epsilon)
     a_proj = -torch.relu(- (a * u).sum(1, keepdim=True)) * u
     return a - a_proj
 
@@ -178,7 +180,7 @@ def norm_squared(a):
     return torch.square(a).sum(1, keepdim=True)
 
 
-def min_norm_proj(a,b, epsilon=1e-12):
+def min_norm_proj(a,b, epsilon=1e-16):
 
     gamma = ((b - a) * b).sum(1, keepdim=True) / norm_squared(b-a).clip(min=epsilon)
     gamma = gamma.clip(min=0,max=1)

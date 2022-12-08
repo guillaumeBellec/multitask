@@ -17,9 +17,10 @@ from multitask_splitter import MultiTaskSplitter, NormalizedMultiTaskSplitter
 # ------------------ CHANGE THE CONFIGURATION -------------
 PATH = './dataset'
 LR = 0.0001
-BATCH_SIZE = 16
-NUM_EPOCHS = 40
+BATCH_SIZE = 32
+NUM_EPOCHS = 50
 n_fc = 128
+balanced_loss = False
 TASKS = ['R', 'L']
 DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
 
@@ -44,6 +45,8 @@ global_transformer = transforms.Compose(
 
 for simulation_name, splitter in configs.items():
     logger.info(f"--> Starting training for: {simulation_name}")
+    if not balanced_loss:
+        simulation_name += "-imbalanced"
 
     results = {
                'train_loss_R': [],
@@ -108,6 +111,10 @@ for simulation_name, splitter in configs.items():
 
             loss_r = F.nll_loss(out_r, label_r)
             loss_l = F.nll_loss(out_l, label_l)
+
+            if not balanced_loss:
+                loss_r *= 1000.
+
             losses = [loss_l, loss_r]
 
             train_loss_R = loss_r.mean().item() if train_loss_R is None else mom * train_loss_R + (1-mom) * loss_r.mean().item()
