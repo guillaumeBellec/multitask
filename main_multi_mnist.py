@@ -16,22 +16,28 @@ from multitask_splitter import MultiTaskSplitter, NormalizedMultiTaskSplitter
 
 # ------------------ CHANGE THE CONFIGURATION -------------
 PATH = './dataset'
-LR = 0.0001
+NUM_EPOCHS = 80
+LR = 0.001
+LR_decay = 0.1
+LR_phase_length = 20
 BATCH_SIZE = 32
-NUM_EPOCHS = 50
 n_fc = 128
-balanced_loss = False
+balanced_loss = True
 TASKS = ['R', 'L']
 DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 configs = {
     #"single-task": None,
-    #"pcgrad": None,
-    #"summed-loss": None,
-    #"splitter-min-norm": MultiTaskSplitter(num_copies=2, use_min_norm_proj=True),
-    #"splitter-truncated": MultiTaskSplitter(num_copies=2, use_min_norm_proj=False),
-    "normd-global-splitter": NormalizedMultiTaskSplitter(2,[1]),
-    "normd-splitter": NormalizedMultiTaskSplitter(2,[n_fc]),
+    "pcgrad": None,
+    "summed-loss": None,
+
+    "normd-global-splitter": NormalizedMultiTaskSplitter(2,[1], symmetric=False),
+    "splitter-truncated": MultiTaskSplitter(num_copies=2, symmetric=False),
+    "normd-splitter": NormalizedMultiTaskSplitter(2, [n_fc], symmetric=False),
+
+    "normd-global-splitter-sym": NormalizedMultiTaskSplitter(2, [1], symmetric=True),
+    "splitter-truncated-sym": MultiTaskSplitter(num_copies=2, symmetric=True),
+    "normd-splitter-sym": NormalizedMultiTaskSplitter(2,[n_fc], symmetric=True),
 }
 # ---------------------------------------------------------
 
@@ -43,7 +49,16 @@ logger = create_logger('Main')
 global_transformer = transforms.Compose(
         [transforms.Normalize((0.1307, ), (0.3081, ))])
 
+CE = nn.CrossEntropyLoss(label_smoothing=0.1)
+
+def change_learning_rate(optim, new_lr):
+    old_lr = optim.param_groups[0]['lr']
+    if old_lr != new_lr:
+        print(f"set learning rate: {old_lr} -> {new_lr}")
+        optim.param_groups[0]['lr'] = new_lr
+
 for simulation_name, splitter in configs.items():
+
     logger.info(f"--> Starting training for: {simulation_name}")
     if not balanced_loss:
         simulation_name += "-imbalanced"
@@ -85,15 +100,19 @@ for simulation_name, splitter in configs.items():
     }
 
     param = [p for v in nets.values() for p in list(v.parameters())]
-    optimizer = torch.optim.Adam(param, lr=LR)
-    if simulation_name == "pcgrad":
-        optimizer = PCGrad(optimizer)
+    adam = torch.optim.Adam(param, lr=LR)
+    optimizer = PCGrad(adam) if simulation_name == "pcgrad" else adam
 
     mom = 0.99
     train_loss_L = None
     train_loss_R = None
 
     for ep in range(NUM_EPOCHS):
+
+        if ep % LR_phase_length == 0:
+            factor = LR_decay ** (ep // LR_phase_length)
+            change_learning_rate(adam, LR * factor)
+
         for net in nets.values():
             net.train()
         for batch in train_loader:
@@ -109,8 +128,8 @@ for simulation_name, splitter in configs.items():
             out_l = nets['L'](rep_l)
             out_r = nets['R'](rep_r)
 
-            loss_r = F.nll_loss(out_r, label_r)
-            loss_l = F.nll_loss(out_l, label_l)
+            loss_r = CE(out_r, label_r)
+            loss_l = CE(out_l, label_l)
 
             if not balanced_loss:
                 loss_r *= 1000.
@@ -157,8 +176,7 @@ for simulation_name, splitter in configs.items():
         results['test_loss_L'] += [float(losses[:,0].mean())]
         results['test_loss_R'] += [float(losses[:,1].mean())]
 
-        date = datetime.now()
-
-    file_name = f"{date.year}_{date.month}_{date.day}_{date.hour}_{date.minute}_{date.second}_{date.microsecond}_{simulation_name}.json"
-    with open("results/" + file_name, "w") as f:
+    date = datetime.now()
+    file_name = f"{date.year}_{date.month:02d}_{date.day:02d}_{date.hour:02d}_{date.minute:02d}_{date.second:02d}_{date.microsecond}_{simulation_name}.json"
+    with open("results_with_schedule/" + file_name, "w") as f:
         json.dump(results,f, indent=4)

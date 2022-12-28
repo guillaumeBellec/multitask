@@ -8,49 +8,43 @@ from torch import Tensor
 class MultiTaskSplitterFunction(torch.autograd.Function):
 
     @staticmethod
-    def forward(ctx, z, num_copies : int, use_min_norm_proj : bool):
+    def forward(ctx, z, num_copies : int, symmetric : bool):
 
-        ctx.save_for_backward(torch.tensor(use_min_norm_proj))
+        ctx.save_for_backward(torch.tensor(symmetric))
         output_list = [z for _ in range(num_copies)]
         return tuple(output_list)
 
     @staticmethod
     def backward(ctx, *g_list):
 
-        use_min_norm_proj, = ctx.saved_tensors
+        use_symmetric = ctx.saved_tensors
         shp = g_list[0].shape
         g_list = [g.reshape(g.shape[0], -1) for g in g_list]
 
         n = len(g_list)
 
         # Orthogonalization of the gradients
-        if use_min_norm_proj:
-            g = g_list[n-1]
-            for i in range(1,n):
-                g = min_norm_proj(g, g_list[n-1-i])
+        projected_g_list = []
+        for i in range(n):
+            g = g_list[i]
+            for j in range(n if use_symmetric else i):
+                g = truncated_proj_a_on_b(g, g_list[j])
+            projected_g_list += [g]
 
-        else:
-            projected_g_list = []
-            for i in range(1,n):
-                g = g_list[i]
-                for j in range(i):
-                    g = truncated_proj_a_on_b(g, g_list[j])
-                projected_g_list += [g]
-
-            g = sum(projected_g_list)
+        g = sum(projected_g_list)
 
         g = g.reshape(shp)
-        return g, None, None
+        return g, None, None, None
 
 
 class MultiTaskSplitter(nn.Module):
 
-    def __init__(self, num_copies, use_min_norm_proj=False, random_order=True):
+    def __init__(self, num_copies, symmetric=True, random_order=True):
         super(MultiTaskSplitter, self).__init__()
 
-        self.use_min_norm_proj = use_min_norm_proj
         self.num_copies = num_copies
-        self.random_order = random_order
+        self.symmetric = symmetric
+        self.random_order = random_order if not symmetric else False
         self.function = MultiTaskSplitterFunction()
 
     def forward(self, x, perm=None):
@@ -100,7 +94,7 @@ class MultiTaskSplitter(nn.Module):
 
         assert(isinstance(x, torch.Tensor)), "got unexpected type: {}".format(type(x))
 
-        x_copies = self.function.apply(x, num_copies, self.use_min_norm_proj)
+        x_copies = self.function.apply(x, num_copies, self.symmetric)
         x_copies = tuple([x_copies[i] for i in perm])
         return x_copies
 
@@ -124,19 +118,23 @@ class GradientNormalizingFunction(torch.autograd.Function):
             # just normalize the gradient norm
             grad_squared = grad_squared.sum()
         else:
-            while len(grads.shape) > len(m.shape):
-                grad_squared = grad_squared.sum(0)
+            while len(grad_squared.shape) > len(m.shape):
+                grad_squared = grad_squared.mean(0)
             # assuming normalization component-wise after batch dimension
-            assert grads.shape[1:] == m.shape, "got gradient with shape: {} variance accumulated: {} ".format(grads.shape, m.shape)
+            assert grad_squared.shape == m.shape, "got gradient with shape: {} variance accumulated: {} ".format(grad_squared.shape, m.shape)
+
+        if t[0] == 0:
+            m.copy_(grad_squared)
+        else:
+            m *= beta
+            m += (1-beta) * grad_squared
 
         t += 1
-        m *= beta
-        m += (1-beta) * grad_squared
 
         v = m / (1 - torch.pow(beta,t))
-        v = v.unsqueeze(0)
         g = grads / torch.sqrt(v).clip(min=epsilon)
         return g, None, None, None, None
+
 
 class GradientNormalizer(nn.Module):
 
@@ -152,15 +150,19 @@ class GradientNormalizer(nn.Module):
         x = self.function.apply(x, self._grad_var.data, self._t.data, self.beta, self.epsilon)
         return x
 
+
 class NormalizedMultiTaskSplitter(nn.Module):
 
-    def __init__(self, num_copies, feature_shape, use_min_norm_proj=False, random_order=True, beta=0.999, epsilon=1e-16, dtype=torch.float32):
+    def __init__(self, num_copies, feature_shape=[1], symmetric=True, random_order=True, beta=0.999, epsilon=1e-16, dtype=torch.float32):
         super(NormalizedMultiTaskSplitter,self).__init__()
         self.num_copies = num_copies
-        self.splitter = MultiTaskSplitter(num_copies=num_copies, use_min_norm_proj=use_min_norm_proj, random_order=random_order)
-        self.normalizers = nn.ModuleList([GradientNormalizer(feature_shape, beta, epsilon, dtype)] * num_copies)
+        self.splitter = MultiTaskSplitter(num_copies=num_copies, random_order=random_order, symmetric=symmetric)
+        make_normalizer = lambda : GradientNormalizer(feature_shape, beta, epsilon, dtype)
+        self.normalizers = nn.ModuleList([make_normalizer() for _ in range(num_copies)])
+        #self.out_normalizer = GradientNormalizer(feature_shape, beta, epsilon, dtype) if feature_shape != [1] else nn.Identity()
 
     def forward(self, x):
+        #x = self.out_normalizer(x)
         x_tuple = self.splitter.forward(x)
         x_list = [normalizer(x) for x, normalizer in zip(x_tuple, self.normalizers)]
         return tuple(x_list)
@@ -172,8 +174,8 @@ def forward_backward_split(z_forward, z_backward):
 
 def truncated_proj_a_on_b(a,b, epsilon=1e-16):
     u = b / torch.sqrt((b * b).sum(1, keepdim=True)).clip(min=epsilon)
-    a_proj = -torch.relu(- (a * u).sum(1, keepdim=True)) * u
-    return a - a_proj
+    a_proj_on_b = -torch.relu(- (a * u).sum(1, keepdim=True)) * u
+    return a - a_proj_on_b
 
 
 def norm_squared(a):

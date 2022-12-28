@@ -1,60 +1,34 @@
-# PyTorch-PCGrad
-
-This repository provide code of reimplementation for [Gradient Surgery for Multi-Task Learning](https://arxiv.org/pdf/2001.06782.pdf) in PyTorch 1.6.0. 
-
-## Setup
-Install the required packages via:
-```
-pip install -r requirements.txt
-```
 
 ## Usage
 
 ```python
-import torch
-import torch.nn as nn
-import torch.optim as optim
-from pcgrad import PCGrad
 
-# wrap your favorite optimizer
-optimizer = PCGrad(optim.Adam(net.parameters())) 
-losses = [...] # a list of per-task losses
-assert len(losses) == num_tasks
-optimizer.pc_backward(losses) # calculate the gradient can apply gradient modification
-optimizer.step()  # apply gradient step
-```
+splitter = NormalizedMultiTaskSplitter(2)
 
-## Training
-- Mulit-MNIST 
-  Please run the training script via the following command. Part of implementation is leveraged from https://github.com/intel-isl/MultiObjectiveOptimization
-  ```
-  python main_multi_mnist.py
-  ```
-  The result is shown below.
-  | Method                  | left-digit | right-digit |
-  | ----------------------- | ---------: | ----------: |
-  | Jointly Training        |      90.30 |       90.01 |
-  | **PCGrad (this repo.)** |  **95.00** |   **92.00** |
-  | PCGrad (official)       |      96.58 |       95.50 |
-
-- Cifar100-MTL
-  coming soon 
-## Reference
-
-Please cite as:
+for x in dataloader:
+    x = base_model(x)
+    x1, x2 = splitter(x) # identity in the forward pass but combines gradients in the backward pass.
+    loss1 = loss_model1(x1)
+    loss2 = loss_model2(x2)
+    loss = loss1 + loss2
+    loss.backward()
+    ... # can be used with any pytorch optimizer
 
 ```
-@article{yu2020gradient,
-  title={Gradient surgery for multi-task learning},
-  author={Yu, Tianhe and Kumar, Saurabh and Gupta, Abhishek and Levine, Sergey and Hausman, Karol and Finn, Chelsea},
-  journal={arXiv preprint arXiv:2001.06782},
-  year={2020}
-}
 
-@misc{Pytorch-PCGrad,
-  author = {Wei-Cheng Tseng},
-  title = {WeiChengTseng/Pytorch-PCGrad},
-  url = {https://github.com/WeiChengTseng/Pytorch-PCGrad.git},
-  year = {2020}
-}
-```
+## Results on Mulit-MNIST:
+Two digits are plotted and the two tasks are to classify digits 1 and 2.
+The dataloader is debugged from [github.com/WeiChengTseng/Pytorch-PCGrad.git](https://github.com/WeiChengTseng/Pytorch-PCGrad.git) and we compare our results to their implementations of pcgrad.  
+
+<b>Preliminary results:</b> the normalized splitter is higher than pcgrad for both tasks, but probably not yet conclusive.
+<b>Left:</b> accuracy for the left digit.
+<b>Right:</b> accuracy for the right digit.
+![MNIST result](results/summary.png)
+
+<b> Invariance to loss scaling (no need to tune loss coeff):</b>
+In this other task with assume the loss1 is multiplied by an unknown coefficient x1000. The normalized splitter is unaffected without re-weighting the losses. 
+
+![MNIST result2](results/summary_imbalanced.png)
+  
+  
+
