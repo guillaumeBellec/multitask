@@ -58,13 +58,13 @@ The dataloader is debugged from the [Pytorch-PCGrad repo](https://github.com/Wei
 <b>Preliminary results:</b> Two digits (left and right) are overlapping on an image.
 The image is processed with a LeNet ConvNet to produce features. The feature vector is then sent into two MLPs to compute classification cross entropy losses for the left and right digit respectively.
 
-![MNIST result2](figures/summary_imbalanced.png)
+![MNIST result2](figures/summary_imbalanced.png)  
 <b>Figure 1. Left:</b> Classification accuracy for the left digit (averaged over 3 independent runs), the x-axis is the epoch number. 
 <b>Right:</b> Classification accuracy for the right digit.
 
 
   
-![MNIST result](figures/summary.png)
+![MNIST result](figures/summary.png)  
 <b> Figure 2.</b> Same as Figure 1, but without the re-weighted of the loss functions, there are already balanced and the normalization has a weaker effect.
 
 ## References
