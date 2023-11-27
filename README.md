@@ -1,5 +1,5 @@
-
-## Usage
+## Multi-task splitter
+A simple deep learning solution for multitask in PyTorch:
 
 ```python
 from multitask_splitter import NormalizedMultiTaskSplitter
@@ -68,6 +68,19 @@ The image is processed with a LeNet ConvNet to produce features. The feature vec
 <b> Figure 2.</b> Same as Figure 1, but without the re-weighted of the loss functions, there are already balanced and the normalization has a weaker effect.
 
 ## References
+
+Cite this repo:
+```bibtex
+@misc{bellec2023,
+  author = {Bellec, G},
+  title = {Multi-task splitter: A simple deep learning solution for multitask in PyTorch},
+  year = {2023},
+  publisher = {GitHub},
+  journal = {GitHub repository},
+  howpublished = {\url{https://github.com/guillaumeBellec/multitask}}
+}
+```
+
 
 
 [1] Gradient Surgery for Multi-Task Learning  
