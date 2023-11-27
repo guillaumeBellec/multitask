@@ -17,14 +17,16 @@ class LeNet5Encoder(nn.Module):
             nn.ReLU(),
             nn.MaxPool2d(kernel_size=2, stride=2))
         self.fc = nn.Linear(320, 256)
+        self.bn = nn.LayerNorm([256])
         self.fc1 = nn.Linear(256, n_fc)
+        self.bn1 = nn.LayerNorm([n_fc])
 
     def forward(self, x):
         out = self.layer1(x)
         out = self.layer2(out)
         out = out.reshape(out.size(0), -1)
-        out = F.relu(self.fc(out))
-        out = F.relu(self.fc1(out))
+        out = F.relu(self.bn(self.fc(out)))
+        out = F.relu(self.bn1(self.fc1(out)))
         return out
 
 
@@ -60,10 +62,12 @@ class MLP(nn.Module):
     def __init__(self, d=84):
         super(MLP, self).__init__()
         self._fc1 = nn.Linear(d, d)
-        self._fc2 = nn.Linear(d, 10)
+        self._fc2 = nn.Linear(d, d)
+        self._fc3 = nn.Linear(d, 10)
         return
 
     def forward(self, x):
         x = F.relu(self._fc1(x))
-        x = self._fc2(x)
+        x = F.relu(self._fc2(x))
+        x = self._fc3(x)
         return F.log_softmax(x, dim=1)
