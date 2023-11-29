@@ -42,6 +42,7 @@ This is disabled by default because it slows down the training a bit (by ~20%, s
 
 ## Results on Mulit-MNIST:
 Two digits are plotted and the two tasks are to classify digits 1 and 2.
+This is similar to the toy multi-task problem considered in [2].
 The dataloader is debugged from the [Pytorch-PCGrad repo](https://github.com/WeiChengTseng/Pytorch-PCGrad.git) and we compare our results to their implementations of pcgrad.  
 
 ![MNIST result2](figures/digits.png)  
@@ -85,5 +86,5 @@ Ozan Sener, Vladlen Koltun
 Alexandre Défossez, Jade Copet, Gabriel Synnaeve, Yossi Adi  
   
 
-[4] Unofficial pytorch pcgrad reposityory    
+[4] Unofficial pytorch pcgrad repository    
 [github.com/WeiChengTseng/Pytorch-PCGrad.git](https://github.com/WeiChengTseng/Pytorch-PCGrad.git)
