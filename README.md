@@ -31,7 +31,7 @@ This enables splitting gradients anywhere in the computational graph unlike with
 In short each gradient is normalization using:
 ```python
 def backward(grads, m): # pseudo-code summary of GradientNormalizer(...)
-    m = beta * m + (1-beta) * grads.square().sum(-1) # momentum of the gradient norms
+    m = beta * m + (1-beta) * grads.square().mean(0).sum() # momentum of the gradient norms, mean on batch dimension
     v = m / (1 - torch.pow(beta,t) # unbiased momentum formula
     return grads / v.sqrt().clip(min=epsilon) * loss_coeff # return the sclaed gradient
 ```
