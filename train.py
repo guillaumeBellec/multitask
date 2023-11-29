@@ -8,9 +8,9 @@ import numpy as np
 from torchvision import transforms
 from utils.multi_mnist_dataset import MultiMNIST
 from net.lenet import LeNet5Encoder, MLP
-from pcgrad import PCGrad
+from torchmultitask.pcgrad import PCGrad
 from utils.logging import create_logger
-from multitask_splitter import NormalizedMultiTaskSplitter
+from torchmultitask.splitter import NormalizedMultiTaskSplitter
 import argparse
 
 # ------------------ CHANGE THE CONFIGURATION -------------
@@ -22,7 +22,7 @@ parser.add_argument("--lr_decay", type=float, default=0.1)
 parser.add_argument("--lr_phase_length", type=int, default=50)
 parser.add_argument("--batch_size", type=int, default=128)
 parser.add_argument("--n_fc", type=int, default=128)
-parser.add_argument("--balanced_loss", type=int, default=0)
+parser.add_argument("--balanced", type=int, default=0)
 parser.add_argument("--simulation_name", type=str, default="normalized-splitter")
 args = parser.parse_args()
 
@@ -36,8 +36,12 @@ splitter_obj_dict = {
     "summed-loss": None,
 
     "normalized-splitter": NormalizedMultiTaskSplitter(task_weight_dict),
-    "normalized-project-splitter": NormalizedMultiTaskSplitter(task_weight_dict, skip_projections=False),
-    "project-splitter": NormalizedMultiTaskSplitter(task_weight_dict, dummy_normalizer=True),
+    "normalized-project1-splitter": NormalizedMultiTaskSplitter(task_weight_dict, projection_variant=1),
+    "normalized-project2-splitter": NormalizedMultiTaskSplitter(task_weight_dict, projection_variant=2),
+    "normalized-project3-splitter": NormalizedMultiTaskSplitter(task_weight_dict, projection_variant=3),
+    "project1-splitter": NormalizedMultiTaskSplitter(task_weight_dict, dummy_normalizer=True, projection_variant=1),
+    "project2-splitter": NormalizedMultiTaskSplitter(task_weight_dict, dummy_normalizer=True, projection_variant=2),
+    "project3-splitter": NormalizedMultiTaskSplitter(task_weight_dict, dummy_normalizer=True, projection_variant=3),
 }
 # ---------------------------------------------------------
 
@@ -51,6 +55,9 @@ global_transformer = transforms.Compose(
 
 CE = nn.CrossEntropyLoss(label_smoothing=0.1)
 
+def stop_grad(x):
+    return x.detach() + x * 0
+
 def change_learning_rate(optim, new_lr, verbose=True):
     old_lr = optim.param_groups[0]['lr']
     if old_lr != new_lr:
@@ -63,7 +70,7 @@ def run(simulation_name):
     if splitter is not None: splitter = splitter.to(DEVICE)
 
     logger.info(f"--> Starting training for: {simulation_name}")
-    if not args.balanced_loss:
+    if not args.balanced:
         simulation_name += "-imbalanced"
 
     results = {
@@ -141,7 +148,7 @@ def run(simulation_name):
             loss_r = CE(out_r, label_r)
             loss_l = CE(out_l, label_l)
 
-            if not args.balanced_loss:
+            if not args.balanced:
                 loss_r *= 1000. # create imbalance artificially
 
             losses = [loss_l, loss_r]

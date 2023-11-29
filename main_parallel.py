@@ -1,24 +1,32 @@
 import subprocess
+import argparse
 
-template = 'python train.py --simulation_name={}'
-repeat = 3
-args = [
-    "single-task",
-    "pcgrad",
-    "summed-loss",
-    "normalized-splitter",
-    "project-splitter",
-    "normalized-project-splitter",
-]
+for balanced in [0,1]:
 
-# Run commands in parallel
-processes = []
+    template = 'python train.py --balanced={} --simulation_name={}'
+    repeat = 3
+    simulation_names = [
+        #"single-task",
+        #"pcgrad",
+        #"summed-loss",
 
-for arg in args:
-    for i in range(repeat):
-        command = template.format(arg)
-        process = subprocess.Popen(command, shell=True)
-        processes.append(process)
+        "project1-splitter",
+        "project2-splitter",
+        "project3-splitter",
+        "normalized-project1-splitter",
+        "normalized-project2-splitter",
+        "normalized-project3-splitter",
+        #"normalized-splitter",
+    ]
 
-# Collect statuses
-output = [p.wait() for p in processes]
+    # Run commands in parallel
+    processes = []
+
+    for sim_name in simulation_names:
+        for i in range(repeat):
+            command = template.format(balanced, sim_name)
+            process = subprocess.Popen(command, shell=True)
+            processes.append(process)
+
+    # Collect statuses
+    output = [p.wait() for p in processes]
