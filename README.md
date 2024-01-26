@@ -30,10 +30,12 @@ An important difference is that it's implemented here with a custom `autograd.Fu
 This enables splitting gradients anywhere in the computational graph unlike with Meta's implementation [(here)](https://github.com/facebookresearch/encodec).
 In short each gradient is normalization using:
 ```python
-def backward(grads, m): # pseudo-code summary of GradientNormalizer(...)
+def backward(grads, m):
+    # pseudo-code summary of GradientNormalizer(...) in gradient_normalizer.py
+    # the NormalizedMultiTaskSplitter(...) in splitter.py does it on all tasks simultaneously to go faster
     m = beta * m + (1-beta) * grads.square().mean(0).sum() # momentum of the gradient norms, mean on batch dimension
     v = m / (1 - torch.pow(beta,t) # unbiased momentum formula
-    return grads / v.sqrt().clip(min=epsilon) * loss_coeff # return the sclaed gradient
+    return grads / v.sqrt().clip(min=epsilon) * loss_coeff # return the scalaed gradient
 ```
 
 **2) Gradient projection:** Inspired by pcgrad [1,4] and this nice paper [2] we also tried to project the gradients onto each other.
