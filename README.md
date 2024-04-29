@@ -42,7 +42,7 @@ def backward(grads, m):
 This is disabled by default because it slows down the training a bit (by ~20%, still faster that the pytorch implementation [3]) in some cases it might improve performance.
 
 
-## Results on Mulit-MNIST:
+## Results on Multi-MNIST:
 Two digits are plotted and the two tasks are to classify digits 1 and 2.
 This is similar to the toy multi-task problem considered in [2].
 The dataloader is debugged from the [Pytorch-PCGrad repo](https://github.com/WeiChengTseng/Pytorch-PCGrad.git) and we compare our results to their implementations of pcgrad.  
