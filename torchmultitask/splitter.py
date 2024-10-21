@@ -58,7 +58,6 @@ class NormalizedMultiTaskSplitterFunction(torch.autograd.Function):
     def backward(ctx, *grads_list):
         m, t, beta, epsilon, scale, dummy_normalizer, projection_variant = ctx.saved_tensors
         n_tasks = m.numel()
-        assert n_tasks > 1, "Expecting more than 1 task."
 
         if projection_variant == 3:
             grads_list = grad_projection(grads_list, epsilon)
@@ -81,7 +80,7 @@ class NormalizedMultiTaskSplitterFunction(torch.autograd.Function):
             assert grad_squared.shape == m.shape, f"got gradient norm: {grad_squared.shape} but momentum is: {m.shape}"
 
             task_mask : torch.Tensor = grad_squared != 0 # exact zero only is null gradient. Do not update momentum.
-            grad_squared = torch.where(task_mask, grad_squared, m) # do not update momentum if it's
+            grad_squared = torch.where(task_mask, grad_squared, m) # do not update momentum if it's masked
 
             # inplace update
             m *= beta
@@ -102,7 +101,7 @@ class NormalizedMultiTaskSplitterFunction(torch.autograd.Function):
         if projection_variant == 1:
             g_sum = sum(grad_projection(g_list, epsilon))
         elif projection_variant == 2:
-            # WARNING: This variant in not recommend.
+            # WARNING: This variant in not recommended.
             # This projection variant comes from Sener et al. 2018
             # https://proceedings.neurips.cc/paper/2018/file/432aca3a1e345e339f35a30c8f65edce-Paper.pdf
             # But somehow my implementation here performs extremely bad in the 2 MNIST task
@@ -127,7 +126,7 @@ class NormalizedMultiTaskSplitter(nn.Module):
                  loss_weights_dict,
                  projection_variant=0,
                  dummy_normalizer=False,
-                 beta=0.9999,  # correspond to a ~10_000 iteration memory
+                 beta=0.999,  # correspond to a ~10_000 iteration memory
                  epsilon=1e-12,
                  dtype=torch.float32,
                  ):
